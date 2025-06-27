@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function AddDirector() {
+function AddDirector({ onSuccess }) {
     const [name, setName] = useState('');
     const [status, setStatus] = useState('');
 
@@ -20,6 +20,7 @@ function AddDirector() {
             if (response.ok) {
                 setStatus('Director added successfully!');
                 setName('');
+                onSuccess && onSuccess();
             } else {
                 setStatus('Failed to add director.');
             }
