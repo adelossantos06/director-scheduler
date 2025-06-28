@@ -32,7 +32,50 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
+}
+
+.employee-card {
+  width: 200px;
+  /* fixed width */
+  min-height: 150px;
+  /* at least this tall */
+  padding: 0.5rem;
+  margin: 0.5rem;
+  /* space between cards */
+  border: 2px solid #888;
+  /* visible border */
+  border-radius: 4px;
+  /* slightly rounded corners */
+  background-color: #fafafa;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* title at top, details at bottom */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  cursor: move;
+  /* hint that it’s draggable later */
+}
+
+.employee-card strong {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.employee-card .details {
+  flex-grow: 1;
+  /* fill the remaining space */
+  border-top: 1px dashed #ccc;
+  padding-top: 0.5rem;
+  overflow-y: auto;
+}
+
+/* When you start dragging/shadow, you can add a class like .dragging */
+.employee-card.dragging {
+  opacity: 0.6;
+  border-color: #005fcc;
 }
