@@ -4,6 +4,9 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const Shift = require('./models/Shift');
+const Responsibility = require('./models/Responsibility');
+const Schedule = require('./models/Schedule');
+const ScheduleEntry = require('./models/ScheduleEntry');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -177,6 +180,228 @@ app.patch('/api/shifts/:id/unassign', async (req, res) => {
         console.error('Error unassigning director from shift:', err);
         res.status(500).json({ message: 'Server error while unassigning director' });
     }
+});
+
+app.get('/api/responsibilities', async (req, res) => {
+    try {
+        const list = await Responsibility.find();
+        res.status(200).json(list);
+    } catch (err) {
+        console.error('Error fetching responsibilities:', err);
+        res.status(500).json({ message: 'Server error while fetching responsibilities' });
+    }
+});
+
+
+
+// PATCH assign a director
+app.patch('/api/responsibilities/:id/assign', async (req, res) => {
+    const { directorId } = req.body;
+    try {
+        const updated = await Responsibility.findByIdAndUpdate(
+            req.params.id,
+            { $addToSet: { directors: directorId } },
+            { new: true }
+        );
+        if (!updated) return res.status(404).json({ message: 'Not found' });
+        res.json(updated);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// PATCH unassign a director
+app.patch('/api/responsibilities/:id/unassign', async (req, res) => {
+    const { directorId } = req.body;
+    try {
+        const updated = await Responsibility.findByIdAndUpdate(
+            req.params.id,
+            { $pull: { directors: directorId } },
+            { new: true }
+        );
+        if (!updated) return res.status(404).json({ message: 'Not found' });
+        res.json(updated);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// POST create a new responsibility
+app.post('/api/responsibilities', async (req, res) => {
+    const { type, show } = req.body;
+    if (!type || !show?.trim()) {
+        return res.status(400).json({ message: 'Type and show name are required' });
+    }
+    try {
+        const resp = new Responsibility({
+            type,
+            show: show.trim(),
+            directors: []
+        });
+        await resp.save();
+        res.status(201).json(resp);
+    } catch (err) {
+        console.error('Error saving responsibility:', err);
+        res.status(500).json({ message: 'Server error while saving responsibility' });
+    }
+});
+
+// PATCH /api/responsibilities/:id/assign
+app.patch('/api/responsibilities/:id/assign', async (req, res) => {
+    const { directorId } = req.body;
+    try {
+        const resp = await Responsibility.findById(req.params.id);
+        if (!resp) {
+            return res.status(404).json({ message: 'Responsibility not found' });
+        }
+        // if you only ever want one director:
+        if (resp.directors.length >= 1) {
+            return res
+                .status(400)
+                .json({ message: 'This responsibility is already assigned to another director.' });
+        }
+        resp.directors.push(directorId);
+        await resp.save();
+        res.json(resp);
+    } catch (err) {
+        console.error('Error assigning responsibility:', err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// DELETE a responsibility
+app.delete('/api/responsibilities/:id', async (req, res) => {
+    try {
+        const deleted = await Responsibility.findByIdAndDelete(req.params.id);
+        if (!deleted) {
+            return res.status(404).json({ message: 'Responsibility not found' });
+        }
+        res.sendStatus(204);
+    } catch (err) {
+        console.error('Error deleting responsibility:', err);
+        res.status(500).json({ message: 'Server error while deleting responsibility' });
+    }
+});
+
+// GET schedules for a date range (with validation)
+app.get('/api/schedules', async (req, res) => {
+    const { from, to } = req.query;
+    if (!from || !to) {
+        return res
+            .status(400)
+            .json({ message: 'Both "from" and "to" query params are required in YYYY-MM-DD format' });
+    }
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    if (isNaN(fromDate) || isNaN(toDate)) {
+        return res
+            .status(400)
+            .json({ message: 'Invalid date format for "from" or "to". Use YYYY-MM-DD' });
+    }
+    try {
+        const list = await Schedule.find({
+            date: { $gte: fromDate, $lte: toDate }
+        }).populate('director');
+        res.json(list);
+    } catch (err) {
+        console.error('Error fetching schedules:', err);
+        res.status(500).json({ message: 'Server error while fetching schedules' });
+    }
+});
+
+// POST to assign a director to a day
+app.post('/api/schedules', async (req, res) => {
+    const { directorId, date } = req.body;
+    const existing = await Schedule.findOne({ director: directorId, date });
+    if (existing) return res.status(400).json({ message: 'Already scheduled' });
+    const sched = new Schedule({ director: directorId, date });
+    await sched.save();
+    res.status(201).json(sched);
+});
+
+// DELETE to un‐schedule
+app.delete('/api/schedules/:id', async (req, res) => {
+    await Schedule.findByIdAndDelete(req.params.id);
+    res.sendStatus(204);
+});
+
+// GET schedules in a date range
+
+app.get('/api/schedules', async (req, res) => {
+    let { from, to } = req.query;
+
+    if (!from || !to) {
+        return res
+            .status(400)
+            .json({ message: 'Both "from" and "to" query params are required in YYYY-MM-DD format' });
+    }
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    if (isNaN(fromDate) || isNaN(toDate)) {
+        return res
+            .status(400)
+            .json({ message: 'Invalid date format for "from" or "to". Use YYYY-MM-DD' });
+    }
+
+    try {
+        const list = await Schedule.find({
+            date: { $gte: fromDate, $lte: toDate }
+        })
+            .populate('director')          // full director document
+            .populate('shift')             // full shift document ({_id, start, end})
+            .populate('responsibilities'); // full responsibility documents
+
+        res.json(list);
+    } catch (err) {
+        console.error('Error fetching schedules:', err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// POST create a calendar booking
+// POST to create schedule
+app.post('/api/schedules', async (req, res) => {
+    const { directorId, date, shiftId } = req.body;
+    if (!directorId || !date || !shiftId) {
+        return res.status(400).json({ message: 'directorId, date, and shiftId are required' });
+    }
+    // optional: check for duplicate
+    const exists = await Schedule.findOne({ director: directorId, date, shift: shiftId });
+    if (exists) return res.status(400).json({ message: 'Already scheduled' });
+
+    const sched = new Schedule({ director: directorId, date, shift: shiftId });
+    await sched.save();
+    res.status(201).json(sched);
+});
+
+// PATCH to update a booking’s responsibilities (or shift)
+app.patch('/api/schedules/:id', async (req, res) => {
+    const updates = {};
+    if (req.body.shiftId) updates.shift = req.body.shiftId;
+    if (req.body.responsibilities) updates.responsibilities = req.body.responsibilities;
+    try {
+        const updated = await ScheduleEntry.findByIdAndUpdate(
+            req.params.id,
+            updates,
+            { new: true }
+        )
+            .populate('director')
+            .populate('shift')
+            .populate('responsibilities');
+        if (!updated) return res.status(404).json({ message: 'Not found' });
+        res.json(updated);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// DELETE a booking
+app.delete('/api/schedules/:id', async (req, res) => {
+    await ScheduleEntry.findByIdAndDelete(req.params.id);
+    res.sendStatus(204);
 });
 
 /*
