@@ -24,56 +24,47 @@ function generateCalendarDates(year, month) {
     return dates;
 }
 
-function ScheduleItem({ entry, shift, responsibilities, onDelete }) {
+function ScheduleItem({
+    entry,
+    shift = { start: '-', end: '-' },   //  ← default fallback
+    responsibilities,
+    onDelete
+}) {
     const [open, setOpen] = useState(false);
     const { director } = entry;
 
-
     return (
         <div className="schedule-item">
-            {/* always-visible header */}
-            <div
-                className="item-header"
-                onClick={() => setOpen(o => !o)}
-            >
-                <span><strong>{director.name}</strong></span>
-                {/* <span>{shift.start}–{shift.end}</span> */}
+            <div className="item-header" onClick={() => setOpen(o => !o)}>
+                <strong>{director.name}</strong>
                 <button
                     onClick={e => { e.stopPropagation(); onDelete(entry._id); }}
                     className="remove-btn"
-                    title="Remove"
-                >
+                    title="Remove">
                     ✕
                 </button>
             </div>
 
-            {/* collapsible details */}
             {open && (
                 <div className="item-details">
-                    {responsibilities.length > 0 ? (
-                        responsibilities.map(r => (
+                    {/* safe‐guard with optional chaining / nullish coalescing */}
+                    <div className="shift-hours">
+                        Shift: {shift?.start ?? '-'} – {shift?.end ?? '-'}
+                    </div>
+
+                    {responsibilities.length > 0
+                        ? responsibilities.map(r => (
                             <div key={r._id}>
                                 {r.type === 'director' ? 'Director of' : 'Utility of'}: {r.show}
                             </div>
                         ))
-                    ) : (
-                        <em>No responsibilities</em>
-                    )}
+                        : <em>No responsibilities</em>
+                    }
                 </div>
             )}
         </div>
     );
 }
-
-ScheduleItem.propTypes = {
-    entry: PropTypes.object.isRequired,
-    shift: PropTypes.shape({
-        start: PropTypes.string,
-        end: PropTypes.string
-    }).isRequired,
-    responsibilities: PropTypes.array.isRequired,
-    onDelete: PropTypes.func.isRequired,
-};
 
 function DayCell({
     date,
@@ -89,9 +80,29 @@ function DayCell({
         new Date(s.date).toISOString().slice(0, 10) === iso
     );
 
+    // const [, dropRef] = useDrop({
+    //     accept: 'DIRECTOR',
+    //     drop: ({ directorId }) => {
+    //         // for example, always assign the first shift:
+    //         const defaultShift = shifts[0]?._id
+    //         onScheduleCreate(directorId, iso, defaultShift)
+    //         console.log({ directorId, date: iso, shiftId: defaultShift });
+    //     }
+
+
+    // })
+
     const [, dropRef] = useDrop({
         accept: 'DIRECTOR',
-        drop: ({ directorId }) => onScheduleCreate(directorId, iso),
+        drop: ({ directorId }) => {
+            const defaultShift = shifts[0]?._id;
+            if (!defaultShift) {
+                console.error('No shifts to assign!');
+                return;
+            }
+            // pass directorId, iso date, AND the shiftId
+            onScheduleCreate(directorId, iso, defaultShift);
+        },
     });
 
     return (
@@ -101,18 +112,19 @@ function DayCell({
             {entries.map(entry => {
                 // lookup full shift object
                 const shiftId = entry.shift && (entry.shift._id || entry.shift);
+                console.log(shiftId)
                 const shiftObj = shifts.find(s => s._id === shiftId) || { start: '—', end: '-' };
                 console.log(shiftObj)
                 // lookup responsibilities array for this director
-                const dirId = entry.director._id || entry.director;
-                const resps = responsibilitiesByDirector[dirId] || [];
+                // const dirId = entry.director._id || entry.director;
+                // const resps = responsibilitiesByDirector[dirId] || [];
 
                 return (
                     <ScheduleItem
                         key={entry._id}
                         entry={entry}
-                        shift={shiftObj}
-                        responsibilities={resps}
+                        shift={entry.shift}
+                        responsibilities={responsibilitiesByDirector[entry.director._id] || []}
                         onDelete={() => onScheduleDelete(entry._id)}
                     />
                 );
@@ -176,7 +188,7 @@ export default function Calendar({
                         key={date.toISOString()}
                         date={date}
                         schedules={schedules}
-                        // shifts={shifts}
+                        shifts={shifts}
                         responsibilitiesByDirector={responsibilitiesByDirector}
                         onScheduleCreate={onScheduleCreate}
                         onScheduleUpdate={onScheduleUpdate}

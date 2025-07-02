@@ -83,11 +83,11 @@ export default function App() {
   ]);
 
   // 2) Handler to create a schedule
-  const handleScheduleCreate = (directorId, dateIso,) => {
+  const handleScheduleCreate = (directorId, dateIso, shiftId) => {
     fetch('http://localhost:8000/api/schedules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ directorId, date: dateIso })
+      body: JSON.stringify({ directorId, date: dateIso, shift: shiftId })
     })
       .then(async res => {
         if (!res.ok) {
